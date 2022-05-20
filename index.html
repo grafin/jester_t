@@ -1,0 +1,316 @@
+<!doctype html>
+<html lancheck_answer>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>Jester - get ready for your tests.</title>
+  <meta name="description" content="Jester - get ready for your tests.">
+  <meta name="author" content="Boris Stepanenko">
+
+  <meta property="og:title" content="Jester - get ready for your tests.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://@TODO">
+  <meta property="og:description" content="Simple site to practice tests.">
+  <meta property="og:image" content="image.png">
+
+  <link rel="icon" href="/favicon.ico">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+
+  <!--Bootstrap-->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-ka7Sk0Gln4gmtz2MlQnikT1wXgYsOg+OMhuP+IlRH9sENBO0LRn5q+8nbTov4+1p" crossorigin="anonymous"></script>
+
+  <!--Fork Awesome font-->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fork-awesome@1.2.0/css/fork-awesome.min.css" integrity="sha256-XoaMnoYC5TH6/+ihMEnospgm0J1PM/nioxbOUdnM8HY=" crossorigin="anonymous">
+
+  <!--Custom-->
+  <link rel="stylesheet" href="css/styles.css?v=1.0">
+</head>
+
+<body>
+  <main>
+    <div class="container">
+      <div class="row mt-3" id="load-block">
+        <div class="input-group input-group-lg mb-3 px-3">
+          <input class="form-control" type="file" id="file-input">
+          <button class="btn btn-outline-secondary" type="button" id="export-btn">
+            <i class="fa fa-download" aria-hidden="true"></i>
+          </button>
+          <button class="btn btn-outline-secondary" type="button" id="save-btn">
+            <i class="fa fa-floppy-o" aria-hidden="true"></i>
+          </button>
+          <button class="btn btn-outline-secondary" type="button" id="load-btn">
+            <i class="fa fa-folder-open" aria-hidden="true"></i>
+          </button>
+          <button class="btn btn-outline-danger" type="button" id="restart-btn">
+            <i class="fa fa-refresh" aria-hidden="true"></i>
+          </button>
+          <button class="btn btn-outline-danger" type="button" id="shuffle-btn">
+            <i class="fa fa-random" aria-hidden="true"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="row" id="test-block" hidden=true>
+        <template id="answer-checkbox-template">
+          <div class="input-group input-group-lg mb-3 px-3">
+            <div class="input-group-text bg-body">
+              <input class="form-check-input mt-0" type="checkbox" value="">
+            </div>
+            <input type="text" class="form-control bg-body" disabled=true>
+          </div>
+        </template>
+
+        <template id="answer-radio-template">
+          <div class="input-group input-group-lg mb-3 px-3">
+            <div class="input-group-text bg-body">
+              <input class="form-check-input mt-0" type="radio" name="radio-btn">
+            </div>
+            <input type="text" class="form-control bg-body" disabled=true>
+          </div>
+        </template>
+
+        <div class="input-group input-group-lg mb-3 px-3">
+          <h2>Вопрос&nbsp;</h2>
+          <h2 id="question-id"></h2>
+        </div>
+
+        <div class="input-group input-group-lg mb-3 px-3">
+          <textarea class="form-control bg-body" disabled=true id="question" style="height: 140px"></textarea>
+        </div>
+
+        <div class="p-0" id="answers">
+        </div>
+
+        <div class="btn-group btn-group-lg mb-3 px-3" role="group">
+          <button type="button" class="btn btn-outline-primary" id="prev-question-btn">
+            <i class="fa fa-chevron-left" aria-hidden="true"></i>
+          </button>
+          <button type="button" class="btn btn-outline-primary" id="submit-btn" hidden=true>
+            Ответить
+          </button>
+          <button type="button" class="btn btn-outline-primary" id="next-question-btn">
+            <i class="fa fa-chevron-right" aria-hidden="true"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script type="module">
+    import { shuffle, load_file } from "./utils.js";
+    import { Test, QuestionType } from "./index.js";
+    import { default_test } from "./default_test.js";
+
+    var run;
+
+    function replacer(key, value) {
+      if(value instanceof Map) {
+        return {
+          dataType: "Map",
+          value: Array.from(value.entries()),
+        };
+      } else {
+        return value;
+      }
+    }
+
+    function reviver(key, value) {
+      if(typeof value === "object" && value !== null) {
+        if (value.dataType === "Map") {
+          return new Map(value.value);
+        }
+      }
+      return value;
+    }
+
+    function show_question() {
+      const testBlock = document.getElementById("test-block");
+      const checkboxTemplate = document.getElementById("answer-checkbox-template");
+      const radioTemplate = document.getElementById("answer-radio-template");
+      const questionBlock = document.getElementById("question");
+      const questionIdBlock = document.getElementById("question-id");
+      const answersBlock = document.getElementById("answers");
+      const submitButton = document.getElementById("submit-btn");
+
+      let question = run.test.questions.get(run.questions[run.current]);
+
+      questionBlock.value = question.text;
+      questionIdBlock.innerHTML = question.id;
+
+      answersBlock.innerHTML = "";
+
+      switch (question.type) {
+        case QuestionType.singlechoice:
+          var answerTemplate = radioTemplate;
+          submitButton.hidden = true;
+          break;
+        case QuestionType.multichoice:
+          var answerTemplate = checkboxTemplate;
+          submitButton.hidden = false;
+          break;
+        case QuestionType.unknow:
+          return;
+      }
+
+      for (let answer of question.answers) {
+        let answerBlock = answerTemplate.content;
+        answerBlock.querySelector("input[type=text]").value = answer.text;
+
+        if (answer.isCorrect) {
+          answerBlock.querySelector(".input-group").classList.add("correct-answer");
+          answerBlock.querySelector(".input-group").classList.remove("wrong-answer");
+        }
+        else {
+          answerBlock.querySelector(".input-group").classList.add("wrong-answer");
+          answerBlock.querySelector(".input-group").classList.remove("correct-answer");
+        }
+
+        answersBlock.appendChild(document.importNode(answerBlock, true));
+      }
+
+      if (question.type == QuestionType.singlechoice)
+        for (let el of document.getElementsByClassName("form-check-input")) {
+          el.addEventListener("change", function (evt) {
+            check_answer();
+          });
+        }
+
+      testBlock.hidden = false;
+    }
+
+    function check_answer() {
+      const answersBlock = document.getElementById("answers");
+
+      for(let answer of answersBlock.children) {
+        let text = answer.querySelector("input[type=text]")
+        let checkbox = answer.querySelector("input[type=radio],input[type=checkbox]");
+
+        if (answer.classList.contains("correct-answer") && checkbox.checked) {
+          text.classList.remove("bg-body", "bg-success", "bg-danger", "bg-opacity-25");
+          answer.querySelector("input[type=text]").classList.add("bg-success", "bg-opacity-25");
+        }
+        else if (answer.classList.contains("correct-answer") && !checkbox.checked) {
+          text.classList.remove("bg-body", "bg-success", "bg-danger", "bg-opacity-25");
+          answer.querySelector("input[type=text]").classList.add("bg-danger", "bg-opacity-25");
+        }
+        else if (
+          run.test.questions.get(run.questions[run.current]).type == QuestionType.multichoice &&
+          answer.classList.contains("wrong-answer") && checkbox.checked
+        ) {
+          text.classList.remove("bg-body", "bg-success", "bg-danger", "bg-opacity-25");
+          answer.querySelector("input[type=text]").classList.add("bg-danger", "bg-opacity-25");
+        }
+        else {
+          text.classList.remove("bg-body", "bg-success", "bg-danger", "bg-opacity-25");
+          answer.querySelector("input[type=text]").classList.add("bg-body");
+        }
+      }
+    }
+
+    function next_question() {
+      if (run.current == run.questions.length - 1)
+        return;
+      run.current += 1;
+      show_question();
+    }
+
+    function prev_question() {
+      if (run.current == 0)
+        return;
+      run.current -= 1;
+      show_question();
+    }
+
+    function save_run() {
+      if (run)
+        window.localStorage.setItem("run", JSON.stringify(run, replacer));
+    }
+
+    function load_run() {
+      if (window.localStorage.run) {
+        run = JSON.parse(window.localStorage.run, reviver);
+        run.test = Test.fromObject(run.test);
+        show_question();
+      }
+    }
+
+    function restart_run() {
+      run.current = 0;
+      show_question();
+    }
+
+    function shuffle_run() {
+      run.test.shuffleAnswers();
+      shuffle(run.questions);
+      restart_run();
+    }
+
+    function load_test_from_file(s, file) {
+      switch (file.type) {
+        case "text/plain":
+          var test = Test.fromString(0, file.name, s);
+          break;
+        default:
+          alert("Unsupported filetype: " + file.type);
+          return;
+      }
+
+      let questions = Array.from(test.questions.keys());
+
+      test.shuffleAnswers();
+      shuffle(questions);
+      run = {
+        test: test,
+        questions: questions,
+        current: 0
+      };
+
+      show_question();
+    }
+
+    window.onload = function() {
+        let test = Test.fromObject(JSON.parse(default_test, reviver));
+
+        run = {
+          test: test,
+          questions: Array.from(test.questions.keys()).sort(function(a, b) {
+            return Number(a) > Number(b);
+          }),
+          current: 0
+        };
+
+        show_question();
+    };
+
+    document.getElementById("file-input").addEventListener("change", function (evt) {
+      load_file(evt.target.files[0], load_test_from_file);
+    });
+    document.getElementById("export-btn").addEventListener("click", function (evt) {
+      console.log(JSON.stringify(JSON.stringify(run.test, replacer)));
+    });
+    document.getElementById("save-btn").addEventListener("click", function (evt) {
+      save_run();
+    });
+    document.getElementById("load-btn").addEventListener("click", function (evt) {
+      load_run();
+    });
+    document.getElementById("restart-btn").addEventListener("click", function (evt) {
+      restart_run();
+    });
+    document.getElementById("shuffle-btn").addEventListener("click", function (evt) {
+      shuffle_run();
+    });
+    document.getElementById("prev-question-btn").addEventListener("click", function (evt) {
+      prev_question();
+    });
+    document.getElementById("next-question-btn").addEventListener("click", function (evt) {
+      next_question();
+    });
+    document.getElementById("submit-btn").addEventListener("click", function (evt) {
+      check_answer();
+    });
+  </script>
+</body>
+</html>
